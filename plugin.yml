@@ -1,0 +1,5 @@
+name: BlockGravity
+main: me.rhin.blockgravity.BlockGravity
+version: 1.0
+api-version: 1.16
+commands:
