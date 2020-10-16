@@ -11,9 +11,10 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
-import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
+import org.bukkit.event.entity.EntityExplodeEvent;
+import org.bukkit.event.entity.ExplosionPrimeEvent;
 import org.bukkit.metadata.FixedMetadataValue;
 
 import me.rhin.blockgravity.BlockGravity;
@@ -82,8 +83,6 @@ public class BlockListener implements Listener {
 			prevBlocks.add(block);
 	}
 
-	// FIXME: We need a way to stop ourselves from going back to blocks in an
-	// infinite loop.
 	private static void updateAdjBlockStrengths(Block block) {
 
 		int blockStrength = getBlockStrength(block);
@@ -149,8 +148,31 @@ public class BlockListener implements Listener {
 	}
 
 	@EventHandler
-	public void blockExplodeEvent(BlockExplodeEvent event) {
-		// TODO: Implement this.
+	public void explosionPrimeEvent(ExplosionPrimeEvent event) {
+		Block block = event.getEntity().getLocation().getBlock();
+
+		if (block.hasMetadata("BLOCK_STRENGTH")) {
+
+			BlockDestroyEvent blockDestroyEvent = new BlockDestroyEvent(event, block);
+			Bukkit.getPluginManager().callEvent(blockDestroyEvent);
+
+			if (blockDestroyEvent.isCancelled())
+				event.setCancelled(true);
+		}
+	}
+
+	@EventHandler
+	public void entityExplodeEvent(EntityExplodeEvent event) {
+
+		// FIXME: This is really inefficient.
+		for (Block block : event.blockList()) {
+
+			if (!block.hasMetadata("BLOCK_STRENGTH"))
+				continue;
+
+			BlockDestroyEvent blockDestroyEvent = new BlockDestroyEvent(event, block);
+			Bukkit.getPluginManager().callEvent(blockDestroyEvent);
+		}
 	}
 
 	@EventHandler
