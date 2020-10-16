@@ -3,7 +3,6 @@ package me.rhin.blockgravity.listener;
 import java.util.ArrayList;
 
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -12,12 +11,16 @@ import org.bukkit.entity.EntityType;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockExplodeEvent;
 import org.bukkit.event.block.BlockFormEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.metadata.FixedMetadataValue;
 
 import me.rhin.blockgravity.BlockGravity;
+import me.rhin.blockgravity.event.BlockCreateEvent;
+import me.rhin.blockgravity.event.BlockDestroyEvent;
+import net.md_5.bungee.api.ChatColor;
 
 public class BlockListener implements Listener {
 
@@ -176,6 +179,50 @@ public class BlockListener implements Listener {
 
 	@EventHandler
 	public void blockPlaceEvent(BlockPlaceEvent event) {
+		BlockCreateEvent blockCreateEvent = new BlockCreateEvent(event, event.getBlock());
+		Bukkit.getPluginManager().callEvent(blockCreateEvent);
+
+		if (blockCreateEvent.isCancelled())
+			event.setCancelled(true);
+	}
+
+	@EventHandler
+	public void blockBreakEvent(BlockBreakEvent event) {
+		BlockDestroyEvent blockDestroyEvent = new BlockDestroyEvent(event, event.getBlock());
+		Bukkit.getPluginManager().callEvent(blockDestroyEvent);
+
+		if (blockDestroyEvent.isCancelled())
+			event.setCancelled(true);
+	}
+
+	@EventHandler
+	public void blockExplodeEvent(BlockExplodeEvent event) {
+		// TODO: Implement this.
+	}
+
+	@EventHandler
+	public void onBlockFall(EntityChangeBlockEvent event) {
+
+		if ((event.getEntityType() == EntityType.FALLING_BLOCK)) {
+
+			// FIXME: I don't like using the runnable here, but we need everything to fall
+			// in place first.
+			Bukkit.getScheduler().runTaskLater(BlockGravity.getInstance(), () -> {
+
+				BlockCreateEvent blockCreateEvent = new BlockCreateEvent(event, event.getBlock());
+				Bukkit.getPluginManager().callEvent(blockCreateEvent);
+
+				if (blockCreateEvent.isCancelled())
+					event.setCancelled(true);
+
+			}, 1);
+		}
+
+	}
+
+	@EventHandler
+	public void blockCreateEvent(BlockCreateEvent event) {
+
 		Block block = event.getBlock();
 
 		Block highestStrengthBlock = null;
@@ -210,9 +257,22 @@ public class BlockListener implements Listener {
 			event.setCancelled(true);
 			return;
 		} else if (blockStrength < 1 && block.getRelative(BlockFace.DOWN).getType().isSolid()) {
+
 			// FIXME: All blocks under this should just fall.
-			event.getPlayer().sendMessage(ChatColor.GRAY + "You hear the ground crack, you pick up the block...");
+			if (event.getEventType() instanceof BlockPlaceEvent) {
+				BlockPlaceEvent placeEvent = (BlockPlaceEvent) event.getEventType();
+				placeEvent.getPlayer()
+						.sendMessage(ChatColor.GRAY + "You hear the ground crack, you pick up the block...");
+			}
+
+			if (event.getEventType() instanceof EntityChangeBlockEvent) {
+				EntityChangeBlockEvent changeBlockEvent = (EntityChangeBlockEvent) event.getEventType();
+				changeBlockEvent.getBlock().setType(Material.AIR);
+				changeBlockEvent.getEntity().remove();
+			}
+
 			event.setCancelled(true);
+
 			return;
 		}
 
@@ -224,7 +284,8 @@ public class BlockListener implements Listener {
 	}
 
 	@EventHandler
-	public void blockBreakEvent(BlockBreakEvent event) {
+	public void blockDestroyEvent(BlockDestroyEvent event) {
+
 		Block block = event.getBlock();
 
 		if (block.hasMetadata("BLOCK_STRENGTH"))
@@ -256,73 +317,5 @@ public class BlockListener implements Listener {
 			}
 
 		}, 1);
-
 	}
-
-	@EventHandler
-	public void blockFromEvent(BlockFormEvent event) {
-
-	}
-
-	// FIXME: Remove the redundant code below and move it into a custom event that
-	// the EntityChangeBlockEvent & BlockPlaceEvent can both call
-	@EventHandler
-	public void onBlockFall(EntityChangeBlockEvent event) {
-
-		if ((event.getEntityType() == EntityType.FALLING_BLOCK)) {
-
-			Bukkit.getScheduler().runTaskLater(BlockGravity.getInstance(), () -> {
-
-				Block block = event.getBlock();
-
-				Block highestStrengthBlock = null;
-
-				for (BlockFace face : getAllBlockFaces()) {
-
-					Block faceBlock = block.getRelative(face);
-					if (!faceBlock.getType().isSolid())
-						continue;
-
-					if (highestStrengthBlock == null
-							|| getBlockStrength(faceBlock) > getBlockStrength(highestStrengthBlock)) {
-						highestStrengthBlock = faceBlock;
-					}
-				}
-
-				// FIXME: highestStrengthBlock can still be null somehow?
-				int blockStrength = -1;
-
-				// If were a block that has a support block under it. Set it to the max strength
-				if (getBlockStrength(block.getRelative(BlockFace.DOWN)) == (BlockGravity.DEFAULT_BLOCK_STRENGTH + 1)) {
-
-					blockStrength = (BlockGravity.DEFAULT_BLOCK_STRENGTH + 1);
-				} else {
-
-					blockStrength = getBlockStrength(highestStrengthBlock) - 1;
-				}
-
-				if (blockStrength < 1 && !block.getRelative(BlockFace.DOWN).getType().isSolid()) {
-
-					Location blockLocation = block.getLocation().add(0.5, 0, 0.5);
-					blockLocation.getWorld().spawnFallingBlock(blockLocation, block.getBlockData());
-					event.setCancelled(true);
-					return;
-				} else if (blockStrength < 1 && block.getRelative(BlockFace.DOWN).getType().isSolid()) {
-					// FIXME: All blocks under this should just fall.
-					block.setType(Material.AIR);
-					event.getEntity().remove();
-					return;
-				}
-
-				block.setMetadata("BLOCK_STRENGTH", new FixedMetadataValue(BlockGravity.getInstance(), blockStrength));
-				BlockGravity.getInstance().getBlockStrengthDebugger().addBlock(block);
-
-				// Then recursively update any adj blocks that have a strength difference > 1.
-				updateAdjBlockStrengths(block);
-
-			}, 1);
-		}
-
-	}
-
 }
