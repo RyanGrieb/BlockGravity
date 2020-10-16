@@ -12,7 +12,6 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockExplodeEvent;
-import org.bukkit.event.block.BlockFormEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.metadata.FixedMetadataValue;
@@ -35,25 +34,6 @@ public class BlockListener implements Listener {
 				: (BlockGravity.DEFAULT_BLOCK_STRENGTH + 1);
 	}
 
-	private static BlockFace getFacePlaced(Block placedBlock, Block againstBlock) {
-		for (BlockFace face : BlockFace.values()) {
-			if (againstBlock.getRelative(face).equals(placedBlock))
-				return face;
-		}
-
-		return null;
-	}
-
-	private static BlockFace[] getHorizontalBlockFaces() {
-		BlockFace[] horizontalFaces = new BlockFace[4];
-		horizontalFaces[0] = BlockFace.EAST;
-		horizontalFaces[1] = BlockFace.WEST;
-		horizontalFaces[2] = BlockFace.NORTH;
-		horizontalFaces[3] = BlockFace.SOUTH;
-
-		return horizontalFaces;
-	}
-
 	private static BlockFace[] getAllBlockFaces() {
 		BlockFace[] horizontalFaces = new BlockFace[6];
 		horizontalFaces[0] = BlockFace.EAST;
@@ -71,33 +51,6 @@ public class BlockListener implements Listener {
 			block = block.getRelative(BlockFace.DOWN);
 
 		return block.getType().isSolid();
-	}
-
-	private static int distanceFromSupportBlock(Block block) {
-		return distanceFromSupportBlock(block, null);
-	}
-
-	private static int distanceFromSupportBlock(Block block, Block prevBlock) {
-
-		if (!isSupportBlock(block)) {
-			// If we are not adj to a support block
-			for (BlockFace face : getHorizontalBlockFaces()) {
-
-				if (block.getRelative(face).getType().isSolid()
-						&& (prevBlock == null || !block.getRelative(face).equals(prevBlock))) {
-
-					int distance = distanceFromSupportBlock(block.getRelative(face), block) + 1;
-
-					if (distance > 0)
-						return distance;
-				}
-			}
-
-			// If we hit a dead end, return an invalid length.
-			return Integer.MIN_VALUE;
-		}
-
-		return 0;
 	}
 
 	private static void revertAdjBlockStrengths(Block block, ArrayList<Block> prevBlocks,
