@@ -28,7 +28,7 @@ public class BlockListener implements Listener {
 
 	public static int getBlockStrength(Block block) {
 
-		if (!block.getType().isSolid())
+		if (block == null || !block.getType().isSolid())
 			return 0;
 
 		return block.hasMetadata("BLOCK_STRENGTH") ? block.getMetadata("BLOCK_STRENGTH").get(0).asInt()
